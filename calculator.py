@@ -60,19 +60,11 @@ def get_total_ingredients(recipes):
 
                     #total_ingredients[item]["quantity"] = str(quantity) + ' ' + unit + ', ' + str(current_quantity) + ' ' + current_unit
 
-    pp = pprint.PrettyPrinter(depth=6)
-    print("TOTAL")
-    pp.pprint(total_ingredients)
-    print("variety units")
-    pp.pprint(variety_units)
-
-
     result = []
 
     for key in total_ingredients.keys():
         total_ingredients[key]['item'] = key;
         if total_ingredients[key]['unit']=='variety':
-            print("variety in ",key)
             txt = ''
             for unit in variety_units[key]:
                 if (txt!=''):

@@ -8,39 +8,41 @@ from flask_cors import CORS
 from pymongo import MongoClient
 import calculator
 
-
 def get_all_recipes():
-    client = MongoClient('127.0.0.1', 27017)
-    db = client.test
     recipes = list(db.recipes.find({}, {'_id':1, 'name':1}))
     return recipes
 
-def search_recipes_by_name(word):
-    client = MongoClient('127.0.0.1', 27017)
-    db = client.test
-    recipes = db.recipes.find({'name': {'$regex': '.*' + word + '.*'}})
-    return recipes
-
-def search_recipes_containing(word):
-    client = MongoClient('127.0.0.1', 27017)
-    db = client.test
-    recipes = db.recipes.find({'$or' : [{'name':{'$regex': '.*' + word +'.*'}},{'ingredients': {'$elemMatch': {'item': {'$regex': '.*' + word + '.*'}}}}]})
-    return recipes
-
 def get_recipe_by_name(name):
-    client = MongoClient('127.0.0.1', 27017)
-    db = client.test
     recipe = db.recipes.find({'name':name})
     return recipe
 
 def get_recipe_by_id(id):
-    client = MongoClient('127.0.0.1', 27017)
-    db = client.test
     recipe = db.recipes.find({'_id':ObjectId(id)}, {"_id":0})
+    return recipe
+
+def search_recipes_by_name(recipe_name):
+    recipes = db.recipes.find({'name': {'$regex': '.*' + recipe_name + '.*'}})
+    return recipes
+
+# search recipes containing term in ingredients and name
+def search_recipes_containing(term):
+    recipes = db.recipes.find({'$or' : [{'name':{'$regex': '.*' + term +'.*'}},{'ingredients': {'$elemMatch': {'item': {'$regex': '.*' + term + '.*'}}}}]})
+    return recipes
+
+def store_week_recipes(week_name, user, week_recipes):
+    result = db.plannings.update({'$and' : [{"weekName":week_name},{"user":user}]},{'$set': {"weekPlanning" : week_recipes} })
+    return result
+
+def get_plannings_by_user(user):
+    recipe = db.plannings.find({'user': user})
     return recipe
 
 app = Flask(__name__)
 CORS(app)
+client = MongoClient('127.0.0.1', 27017)
+db = client.test
+
+
 
 @app.route("/recipes/", methods = ['GET'])
 def recipes():
@@ -77,36 +79,43 @@ def recipe_detail_by_id(id):
 
 @app.route("/recipes/shopping-list/", methods = ['POST'])
 def recipes_calculate_ingredients():
-    '''
-    mockresponse = {"0": [{"id": "59b99963a8baaaf3676c57ed", "name": "pimientos rellenos (bajoques farcides)"}],
-    "1": [{"id": "59b99963a8baaaf3676c57ef", "name": "arroz con verduras"}], "2": [], "3": [],
-    "4": [{"id": "59b99963a8baaaf3676c57eb", "name": "ensalada de lentejas"}]}
-    '''
     recipes_data = request.data
-    mockresponse = json.loads(recipes_data)
+    week_recipes = json.loads(recipes_data)
     recipes = []
-    print(mockresponse)
-    for day in mockresponse.keys():
-        print("day ", day)
-        day_recipes = mockresponse.get(day)
+    for day_index in week_recipes.keys():
+        day_recipes = week_recipes.get(day_index)
         for recipe in day_recipes:
-            print(recipe["id"]," ", recipe["servings"])
-            data = get_recipe_by_id(recipe["id"])
-            for item in data:
-                if item["servings"]!=recipe["servings"]:
-                    print("We should adapt ",recipe["name"]," from ",item["servings"]," to ",recipe["servings"])
-                    item = calculator.get_scaled_recipe(item, int(recipe["servings"]))
-                recipes.append(item)
+            db_recipe = get_recipe_by_id(recipe["id"])[0]
+            if db_recipe["servings"]!=recipe["servings"]:
+                db_recipe = calculator.get_scaled_recipe(db_recipe, int(recipe["servings"]))
+            recipes.append(db_recipe)
 
-    print("recipes:",recipes)
     total_ingredients = calculator.get_total_ingredients(recipes)
-    print("total ingredients", total_ingredients)
-    #total_ingredients = {"id":"1", "ingredients": total_ingredients}
     total_ingredients_json = json.dumps(total_ingredients, cls=JSONEncoder)
-
     resp = Response(total_ingredients_json, mimetype='application/json')
     resp.headers['Access-Control-Allow-Origin'] = '*'
     return resp
+
+@app.route("/plannings/", methods = ['POST'])
+def store_week():
+    data = json.loads(request.data)
+    week_name = data["weekName"]
+    week_recipes = data["weekRecipes"]
+    result = store_week_recipes(week_name,"dani",week_recipes)
+    if result["updatedExisting"]:
+        return Response(json.dumps(result), status=200, mimetype='application/json')
+    else:
+        return Response(json.dumps(result), status=404, mimetype='application/json')
+
+@app.route("/plannings/", methods = ['GET'])
+def get_plannings():
+    dbplannings = get_plannings_by_user("dani")
+    plannings = []
+    for dbresult in dbplannings:
+        plannings.append({'id': str(dbresult["_id"]), 'weekName': dbresult["weekName"]})
+    result_json = json.dumps(plannings, cls=JSONEncoder)
+    return Response(result_json, status=200, mimetype='application/json')
+
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -115,7 +124,6 @@ class JSONEncoder(json.JSONEncoder):
             return str(o)
         return json.JSONEncoder.default(self, o)
 
-#recipes_calculate_ingredients()
 app.run(host="localhost")
 #app.run(host="192.168.1.129")
 
