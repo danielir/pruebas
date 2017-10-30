@@ -13,7 +13,7 @@ def get_mapping(mapping_name):
     return mapped_ingredients
 
 def search_mapping(mapping_name, ingredient):
-    mappings = db.mappings.find({"name":mapping_name}, {ingredient : 1})
+    mappings = db.mappings.find_one({"name":mapping_name}, {ingredient : 1})
     return mappings
 
 def update_mapping(mapping_name, object):
@@ -27,26 +27,34 @@ client = MongoClient('127.0.0.1', 27017)
 db = client.test
 
 
+
 @app.route("/mappings/", methods = ['GET'])
 def mappings():
-    if 'ingredient' in request.args:
-        if 'mapping' in request.args:
-            mapping = request.args["mapping"]
-        else:
-            mapping = "mercadona by dani"
-        dbresult = search_mapping(mapping, request.args['ingredient'])
-        l = list(dbresult)
-        m = l[0][request.args['ingredient']]
-    elif 'name' in request.args:
-        dbresult = get_mapping(request.args['name'])
-        m = list(dbresult)
-
-    recipes_json = json.dumps(m, cls=JSONEncoder)
-    resp = Response(recipes_json, mimetype='application/json')
+    mapping_result = ''
+    dbresult = get_mapping(request.args['name'])
+    mapping_result = list(dbresult)
+    json_response = json.dumps(mapping_result, cls=JSONEncoder)
+    resp = Response(json_response, mimetype='application/json')
     resp.headers['Access-Control-Allow-Origin'] = '*'
     return resp
 
-@app.route("/mappings/", methods = ['PUT'])
+
+@app.route("/mapping/", methods = ['GET'])
+def mapping():
+    mapping_result = ''
+    if 'ingredient' and 'mapping' in request.args:
+        mapping_name = request.args["mapping"]
+        ingredient_name = request.args['ingredient']
+        result_obj = search_mapping(mapping_name, ingredient_name)
+        if ingredient_name in result_obj:
+            mapping_result = result_obj[ingredient_name]
+
+    json_response = json.dumps(mapping_result, cls=JSONEncoder)
+    resp = Response(json_response, mimetype='application/json')
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
+
+@app.route("/mapping/", methods = ['PUT'])
 def update_mappings():
     mapping = json.loads(request.data)
     db_resp = update_mapping("mercadona by dani", mapping)

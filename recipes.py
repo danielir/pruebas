@@ -30,12 +30,17 @@ def search_recipes_containing(term):
     return recipes
 
 def store_week_recipes(week_name, user, week_recipes):
-    result = db.plannings.update({'$and' : [{"weekName":week_name},{"user":user}]},{'$set': {"weekPlanning" : week_recipes} })
+    result = db.plannings.update({'$and' : [{"weekName":week_name},{"user":user}]},{'$set': {"weekPlanning" : week_recipes}}, upsert=True)
     return result
 
 def get_plannings_by_user(user):
     recipe = db.plannings.find({'user': user})
     return recipe
+
+def get_planning_by_id(id):
+    result = db.plannings.find_one({'_id':ObjectId(id)}, {"_id":0})
+    return result
+
 
 app = Flask(__name__)
 CORS(app)
@@ -82,8 +87,7 @@ def recipes_calculate_ingredients():
     recipes_data = request.data
     week_recipes = json.loads(recipes_data)
     recipes = []
-    for day_index in week_recipes.keys():
-        day_recipes = week_recipes.get(day_index)
+    for day_recipes in week_recipes:
         for recipe in day_recipes:
             db_recipe = get_recipe_by_id(recipe["id"])[0]
             if db_recipe["servings"]!=recipe["servings"]:
@@ -116,6 +120,11 @@ def get_plannings():
     result_json = json.dumps(plannings, cls=JSONEncoder)
     return Response(result_json, status=200, mimetype='application/json')
 
+@app.route("/plannings/<id>", methods = ['GET'])
+def get_planning(id):
+    dbplanning = get_planning_by_id(id)
+    planning_json = json.dumps(dbplanning, cls=JSONEncoder)
+    return Response(planning_json, status=200, mimetype='application/json')
 
 
 class JSONEncoder(json.JSONEncoder):
